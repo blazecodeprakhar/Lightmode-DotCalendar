@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Visualizing the progress of the year 2026. A daily dot-based calendar.">
+    <title>Year Progress 2026</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            /* Light Mode Palette */
+            --bg-color: #F8F9FA;
+            /* Soft white background */
+            --text-primary: #1A1A1A;
+            --text-secondary: #6B7280;
+            --accent-glow: #10B981;
+            --accent-dim: rgba(16, 185, 129, 0.15);
+            --dot-completed: #1F2937;
+            --dot-past-dim: #374151;
+            --dot-future: #FFFFFF;
+            --dot-future-border: #D1D5DB;
+            --watermark: #9CA3AF;
+
+            /* Sizing Defaults */
+            --dot-size: 12px;
+            --dot-gap: 10px;
+            --container-max-width: 1080px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: default;
+        }
+
+        html,
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Ambient Background Glow */
+        .ambient-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 120vw;
+            height: 120vh;
+            background: radial-gradient(circle at center, rgba(16, 185, 129, 0.08), transparent 60%);
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+
+
+        /* --- Main Content (Dots) --- */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            position: relative;
+            padding: 40px;
+            z-index: 5;
+            perspective: 1000px;
+            gap: 40px;
+        }
+
+        .stats-container {
+            width: 100%;
+            max-width: var(--container-max-width);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 0 4px;
+        }
+
+        .dots-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: center;
+            gap: var(--dot-gap);
+            width: 100%;
+            max-width: var(--container-max-width);
+            margin-top: 28vh;
+        }
+
+        .dot {
+            width: var(--dot-size);
+            height: var(--dot-size);
+            border-radius: 50%;
+            position: relative;
+            opacity: 0;
+            /* JS will animate this to 1 */
+            transform: scale(0.8);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                background-color 0.3s ease,
+                box-shadow 0.3s ease;
+        }
+
+        /* Rendering States */
+
+        /* 1. Completed Days */
+        .dot.completed {
+            background-color: var(--dot-completed);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 2. Today */
+        .dot.today {
+            background-color: var(--dot-completed);
+            box-shadow: 0 0 20px var(--accent-glow), 0 0 10px var(--accent-glow);
+            z-index: 10;
+            transform: scale(1.3);
+            animation: breathe 3s infinite ease-in-out forwards;
+        }
+
+        /* 3. Future Days */
+        .dot.future {
+            background-color: var(--dot-future);
+            border: 1px solid var(--dot-future-border);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Interactions */
+        .dot:hover {
+            transform: scale(1.5) !important;
+            /* Force override for today state */
+            z-index: 20;
+            cursor: pointer;
+        }
+
+        .dot.completed:hover {
+            background-color: #000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .dot.future:hover {
+            border-color: var(--text-secondary);
+            background-color: #E5E7EB;
+        }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(10px) translateX(-50%);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            white-space: nowrap;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+        }
+
+        #tooltip.visible {
+            opacity: 1;
+            transform: translateY(0) translateX(-50%);
+        }
+
+        @keyframes breathe {
+
+            0%,
+            100% {
+                box-shadow: 0 0 15px var(--accent-glow), 0 0 5px var(--dot-completed);
+                transform: scale(1.2);
+            }
+
+            50% {
+                box-shadow: 0 0 30px var(--accent-glow), 0 0 10px var(--dot-completed);
+                transform: scale(1.35);
+            }
+        }
+
+
+
+        .footer-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .footer-stat .label {
+            font-size: 0.7rem;
+            color: #71717A;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .footer-stat .value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+
+
+        /* --- Media Queries --- */
+
+        @media (max-width: 1024px) {
+            :root {
+                --dot-size: 10px;
+                --dot-gap: 8px;
+                --container-max-width: 800px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --dot-size: 10px;
+                --dot-gap: 8px;
+            }
+
+            main {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            :root {
+                /* Larger dots for mobile to fill space */
+                --dot-size: 12px;
+                --dot-gap: 8px;
+            }
+
+            /* Mobile specific adjustments if needed */
+            .stats-container {
+                padding: 0 10px;
+            }
+
+            .footer-stat {
+                align-items: flex-start;
+            }
+
+            .footer-stat:nth-child(2) {
+                align-items: flex-end;
+                text-align: right;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ambient-glow"></div>
+
+
+
+    <main>
+        <div class="dots-container" id="dots-grid"></div>
+        <div id="tooltip"></div>
+
+        <div class="stats-container">
+            <div class="footer-stat" style="text-align: left;">
+                <span class="label">Completed</span>
+                <span class="value" id="days-completed">...</span>
+            </div>
+
+            <div class="footer-stat" style="text-align: right;">
+                <span class="label">Progress</span>
+                <span class="value" id="progress-percent">...</span>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const GRID = document.getElementById('dots-grid');
+            const TOOLTIP = document.getElementById('tooltip');
+
+
+
+            // Footer Elements
+            const COMPLETED_EL = document.getElementById('days-completed');
+            const PROGRESS_EL = document.getElementById('progress-percent');
+
+            const YEAR = 2026;
+            const TOTAL_DAYS = 365;
+
+            // --- Helper Functions ---
+
+            // Get Day of Year and Current Date Details
+            function getYearDetails() {
+                const now = new Date();
+                const start = new Date(YEAR, 0, 1);
+
+                // If we are strictly checking against the real "now", use it.
+                // If "now" is in 2025, Day is 0. If 2027, Day is 366.
+                let diff = now - start;
+                let oneDay = 1000 * 60 * 60 * 24;
+                let dayOfYear = Math.floor(diff / oneDay) + 1;
+
+                return {
+                    dayOfYear,
+                    now
+                };
+            }
+
+            // Create Date String from Day Number
+            function getDateFromDayNumber(dayNumber) {
+                const date = new Date(YEAR, 0, dayNumber);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+
+            // --- Core Logic ---
+
+            function updateTime() {
+                const { now, dayOfYear } = getYearDetails();
+
+
+
+                // Stats
+                const completed = Math.max(0, dayOfYear - 1);
+                const percent = ((completed / TOTAL_DAYS) * 100).toFixed(2);
+
+                COMPLETED_EL.innerText = `${completed} Days`;
+                PROGRESS_EL.innerText = `${percent}%`;
+
+                return dayOfYear;
+            }
+
+            // --- Rendering ---
+
+            function render() {
+                GRID.innerHTML = '';
+                const { dayOfYear } = getYearDetails();
+
+                const fragment = document.createDocumentFragment();
+
+                for (let i = 1; i <= TOTAL_DAYS; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot';
+
+                    // State Styling
+                    if (i < dayOfYear) {
+                        dot.classList.add('completed');
+                    } else if (i === dayOfYear) {
+                        dot.classList.add('today');
+                    } else {
+                        dot.classList.add('future');
+                    }
+
+                    // Tooltip Events
+                    dot.addEventListener('mouseenter', (e) => {
+                        const dateStr = getDateFromDayNumber(i);
+                        let status = i < dayOfYear ? 'Completed' : (i === dayOfYear ? 'Today' : 'Future');
+
+                        TOOLTIP.innerHTML = `${dateStr} <span style="opacity:0.5; margin-left:4px">${status}</span>`;
+                        TOOLTIP.classList.add('visible');
+
+                        // Position logic - Above the dot
+                        const rect = dot.getBoundingClientRect();
+                        const tipRect = TOOLTIP.getBoundingClientRect(); // will be approximate since it's hidden or animating
+
+                        // We must calculate manually since tooltip might be invisible
+                        // Using fixed offset
+                        const top = rect.top - 40;
+                        const left = rect.left + (rect.width / 2);
+
+                        TOOLTIP.style.top = `${top}px`;
+                        TOOLTIP.style.left = `${left}px`;
+                    });
+
+                    dot.addEventListener('mouseleave', () => {
+                        TOOLTIP.classList.remove('visible');
+                    });
+
+                    // Staggered Animation Delay
+                    const delay = Math.min(i * 3, 1500); // 3ms per dot staggering
+                    setTimeout(() => {
+                        dot.style.opacity = '1';
+                        if (i !== dayOfYear) dot.style.transform = 'scale(1)'; // Today has its own animation
+                    }, delay);
+
+                    fragment.appendChild(dot);
+                }
+
+                GRID.appendChild(fragment);
+            }
+
+            // Start
+            render();
+            updateTime();
+
+            // Loop
+            setInterval(() => {
+                const current = getYearDetails().dayOfYear;
+                updateTime();
+                // We could re-render here if the day changes, but practically it's rare.
+                // updateTime handles the text updates.
+            }, 1000);
+        });
+    </script>
+</body>
+
+</html>
